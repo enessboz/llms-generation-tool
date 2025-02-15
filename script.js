@@ -13,20 +13,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const descriptionInput = document.getElementById('descriptionInput');
 
     // URL Listesi / Sitemap geçişi
-    urlListBtn.addEventListener('click', () => {
+    urlListBtn.addEventListener('click', function() {
         urlListBtn.classList.add('active');
         sitemapBtn.classList.remove('active');
-        urlInput.placeholder = 'Her satıra bir URL gelecek şekilde URL\'leri giriniz';
+        urlInput.placeholder = 'Her satıra bir URL gelecek şekilde URLleri giriniz';
     });
 
-    sitemapBtn.addEventListener('click', () => {
+    sitemapBtn.addEventListener('click', function() {
         sitemapBtn.classList.add('active');
         urlListBtn.classList.remove('active');
-        urlInput.placeholder = 'Site haritası URL\'sini giriniz';
+        urlInput.placeholder = 'Site haritası URLsini giriniz';
     });
 
     // LLMS.txt oluşturma
-    generateBtn.addEventListener('click', async () => {
+    generateBtn.addEventListener('click', function() {
         const urls = urlInput.value.trim();
         if (!urls) {
             alert('Lütfen URL giriniz!');
@@ -37,16 +37,19 @@ document.addEventListener('DOMContentLoaded', function() {
         resultArea.style.display = 'none';
 
         try {
-            let urlList = urls.split('\n').filter(url => url.trim());
+            let urlList = urls.split('\n').filter(function(url) { 
+                return url.trim(); 
+            });
+            
             let result = `# ${titleInput.value || 'LLMS.txt'}\n`;
             
             if (descriptionInput.value) {
                 result += `> ${descriptionInput.value}\n`;
             }
 
-            for (const url of urlList) {
+            urlList.forEach(function(url) {
                 result += `- [${url}](${url})\n`;
-            }
+            });
 
             resultOutput.value = result;
             resultArea.style.display = 'block';
@@ -57,15 +60,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Kopyalama işlemi
-    copyBtn.addEventListener('click', () => {
+    // Kopyala butonu
+    copyBtn.addEventListener('click', function() {
         resultOutput.select();
         document.execCommand('copy');
         alert('Kopyalandı!');
     });
 
-    // İndirme işlemi
-    downloadBtn.addEventListener('click', () => {
+    // İndir butonu
+    downloadBtn.addEventListener('click', function() {
         const blob = new Blob([resultOutput.value], { type: 'text/plain' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
