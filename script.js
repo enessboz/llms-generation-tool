@@ -91,49 +91,92 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // LLMS.txt oluşturma fonksiyonu
 async function generateLLMS(urls) {
-    let result = `# ${titleInput.value || 'LLMS.txt'}\n`;
+    let result = '';
     
-    if (descriptionInput.value) {
-        result += `> ${descriptionInput.value}\n`;
+    // Başlık ekleme
+    const title = titleInput.value.trim();
+    if (title) {
+        result += `# ${title}\n`;
     }
-
+    
+    // Açıklama ekleme
+    const description = descriptionInput.value.trim();
+    if (description) {
+        result += `> ${description}\n`;
+    }
+    
+    // Her URL için içerik oluşturma
     for (const url of urls) {
         try {
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                mode: 'cors',
+                headers: {
+                    'Accept': 'text/html'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const html = await response.text();
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
-
-            // Başlık alma
+            
+            // Başlık alma (önce H1, yoksa meta title)
+            let pageTitle = '';
             const h1 = doc.querySelector('h1');
             const metaTitle = doc.querySelector('title');
-            const title = h1 ? h1.textContent : (metaTitle ? metaTitle.textContent : url);
-
-            // Açıklama alma
+            
+            if (h1 && h1.textContent.trim()) {
+                pageTitle = h1.textContent.trim();
+            } else if (metaTitle && metaTitle.textContent.trim()) {
+                pageTitle = metaTitle.textContent.trim();
+            } else {
+                pageTitle = 'Başlık bulunamadı';
+            }
+            
+            // Açıklama alma (önce meta description, yoksa ilk p etiketi)
+            let pageDescription = '';
             const metaDesc = doc.querySelector('meta[name="description"]');
-            let description = '';
-            if (metaDesc) {
-                description = metaDesc.getAttribute('content');
+            
+            if (metaDesc && metaDesc.getAttribute('content')) {
+                pageDescription = metaDesc.getAttribute('content').trim();
             } else {
                 const firstP = doc.querySelector('p');
-                if (firstP) {
-                    description = firstP.textContent.substring(0, 200);
-                    if (firstP.textContent.length > 200) description += '...';
+                if (firstP && firstP.textContent.trim()) {
+                    pageDescription = firstP.textContent.trim().substring(0, 200);
+                    if (firstP.textContent.length > 200) {
+                        pageDescription += '...';
+                    }
                 }
             }
-
-            result += `- [${title}](${url})${description ? ': ' + description : ''}\n`;
+            
+            // LLMS formatında satır oluşturma
+            result += `- [${pageTitle}](${url})${pageDescription ? ': ' + pageDescription : ''}\n`;
+            
         } catch (error) {
-            console.error(`Error processing ${url}:`, error);
-            result += `- [Error](${url}): Could not process this URL\n`;
+            console.error(`URL işlenirken hata oluştu ${url}:`, error);
+            result += `- [Hata: İçerik alınamadı](${url})\n`;
         }
     }
-
+    
     return result;
 }
 
-// Sitemap işleme fonksiyonu (gerekirse implement edilecek)
+// Sitemap işleme fonksiyonu
 async function processSitemap(sitemapUrl) {
-    // Sitemap işleme kodu buraya gelecek
-    throw new Error('Sitemap işleme özelliği henüz eklenmedi');
+    try {
+        const response = await fetch(sitemapUrl);
+        const xmlText = await response.text();
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+        
+        // URL'leri topla
+        const urls = Array.from(xmlDoc.getElementsByTagName('loc')).map(loc => loc.textContent);
+        
+        return urls;
+    } catch (error) {
+        throw new Error('Sitemap işlenirken hata oluştu: ' + error.message);
+    }
 } 
