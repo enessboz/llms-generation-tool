@@ -108,18 +108,16 @@ async function generateLLMS(urls) {
     // Her URL için içerik oluşturma
     for (const url of urls) {
         try {
-            const response = await fetch(url, {
-                mode: 'cors',
-                headers: {
-                    'Accept': 'text/html'
-                }
-            });
+            // CORS Proxy ekleyelim
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+            const response = await fetch(proxyUrl);
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
-            const html = await response.text();
+            const data = await response.json();
+            const html = data.contents;
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
             
@@ -167,12 +165,13 @@ async function generateLLMS(urls) {
 // Sitemap işleme fonksiyonu
 async function processSitemap(sitemapUrl) {
     try {
-        const response = await fetch(sitemapUrl);
-        const xmlText = await response.text();
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(sitemapUrl)}`;
+        const response = await fetch(proxyUrl);
+        const data = await response.json();
+        const xmlText = data.contents;
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
         
-        // URL'leri topla
         const urls = Array.from(xmlDoc.getElementsByTagName('loc')).map(loc => loc.textContent);
         
         return urls;
