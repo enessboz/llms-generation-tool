@@ -96,32 +96,33 @@ async function generateLLMS(urls) {
     // Başlık ekleme
     const title = titleInput.value.trim();
     if (title) {
-        result += `# ${title}\n`;
+        result += `# ${title}\n\n`;
     }
     
     // Açıklama ekleme
     const description = descriptionInput.value.trim();
     if (description) {
-        result += `> ${description}\n`;
+        result += `> ${description}\n\n`;
     }
     
     // Her URL için içerik oluşturma
     for (const url of urls) {
         try {
-            // CORS Proxy ekleyelim
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-            const response = await fetch(proxyUrl);
+            const proxyUrl = `https://cors-anywhere.herokuapp.com/${url}`;
+            const response = await fetch(proxyUrl, {
+                headers: {
+                    'Origin': window.location.origin
+                }
+            });
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
-            const data = await response.json();
-            const html = data.contents;
+            const html = await response.text();
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
             
-            // Başlık alma (önce H1, yoksa meta title)
             let pageTitle = '';
             const h1 = doc.querySelector('h1');
             const metaTitle = doc.querySelector('title');
@@ -131,10 +132,9 @@ async function generateLLMS(urls) {
             } else if (metaTitle && metaTitle.textContent.trim()) {
                 pageTitle = metaTitle.textContent.trim();
             } else {
-                pageTitle = 'Başlık bulunamadı';
+                pageTitle = url; // URL'yi başlık olarak kullan
             }
             
-            // Açıklama alma (önce meta description, yoksa ilk p etiketi)
             let pageDescription = '';
             const metaDesc = doc.querySelector('meta[name="description"]');
             
@@ -150,12 +150,12 @@ async function generateLLMS(urls) {
                 }
             }
             
-            // LLMS formatında satır oluşturma
+            // Doğru formatta çıktı oluştur
             result += `- [${pageTitle}](${url})${pageDescription ? ': ' + pageDescription : ''}\n`;
             
         } catch (error) {
             console.error(`URL işlenirken hata oluştu ${url}:`, error);
-            result += `- [Hata: İçerik alınamadı](${url})\n`;
+            result += `- [${url}](${url})\n`;
         }
     }
     
@@ -165,17 +165,37 @@ async function generateLLMS(urls) {
 // Sitemap işleme fonksiyonu
 async function processSitemap(sitemapUrl) {
     try {
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(sitemapUrl)}`;
-        const response = await fetch(proxyUrl);
-        const data = await response.json();
-        const xmlText = data.contents;
+        // CORS proxy URL'sini düzelt
+        const proxyUrl = `https://cors-anywhere.herokuapp.com/${sitemapUrl}`;
+        const response = await fetch(proxyUrl, {
+            headers: {
+                'Origin': window.location.origin
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const xmlText = await response.text();
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
         
-        const urls = Array.from(xmlDoc.getElementsByTagName('loc')).map(loc => loc.textContent);
+        // Tüm loc etiketlerini bul ve URL'leri topla
+        const urls = [];
+        const locations = xmlDoc.getElementsByTagName('loc');
+        for (let i = 0; i < locations.length; i++) {
+            urls.push(locations[i].textContent.trim());
+        }
         
+        if (urls.length === 0) {
+            throw new Error('Sitemap\'te URL bulunamadı');
+        }
+
+        console.log('Bulunan URLler:', urls); // Debug için
         return urls;
     } catch (error) {
-        throw new Error('Sitemap işlenirken hata oluştu: ' + error.message);
+        console.error('Sitemap işleme hatası:', error);
+        throw new Error(`Sitemap işlenirken hata oluştu: ${error.message}`);
     }
 } 
