@@ -26,39 +26,30 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // LLMS.txt oluşturma
-    generateBtn.addEventListener('click', function() {
-        const urls = urlInput.value.trim();
-        if (!urls) {
-            alert('Lütfen URL giriniz!');
-            return;
+    generateBtn.onclick = function() {
+        // URL'leri al ve boş satırları temizle
+        const urls = urlInput.value.split('\n').filter(url => url.trim());
+        
+        // Başlık ve açıklamayı al
+        const title = titleInput.value || 'LLMS.txt';
+        const description = descriptionInput.value;
+
+        // LLMS.txt formatında çıktı oluştur
+        let output = `# ${title}\n`;
+        
+        if (description) {
+            output += `> ${description}\n`;
         }
 
-        loader.style.display = 'block';
-        resultArea.style.display = 'none';
+        // Her URL için link oluştur
+        urls.forEach(url => {
+            output += `- [${url}](${url})\n`;
+        });
 
-        try {
-            let urlList = urls.split('\n').filter(function(url) { 
-                return url.trim(); 
-            });
-            
-            let result = `# ${titleInput.value || 'LLMS.txt'}\n`;
-            
-            if (descriptionInput.value) {
-                result += `> ${descriptionInput.value}\n`;
-            }
-
-            urlList.forEach(function(url) {
-                result += `- [${url}](${url})\n`;
-            });
-
-            resultOutput.value = result;
-            resultArea.style.display = 'block';
-        } catch (error) {
-            alert('Bir hata oluştu: ' + error.message);
-        } finally {
-            loader.style.display = 'none';
-        }
-    });
+        // Sonucu göster
+        resultOutput.value = output;
+        resultArea.style.display = 'block';
+    };
 
     // Kopyala butonu
     copyBtn.addEventListener('click', function() {
