@@ -13,53 +13,72 @@ document.addEventListener('DOMContentLoaded', function() {
     const descriptionInput = document.getElementById('descriptionInput');
 
     // URL Listesi / Sitemap geçişi
-    urlListBtn.addEventListener('click', function() {
+    urlListBtn.addEventListener('click', () => {
         urlListBtn.classList.add('active');
         sitemapBtn.classList.remove('active');
-        urlInput.placeholder = 'Her satıra bir URL gelecek şekilde URLleri giriniz';
+        urlInput.placeholder = 'Her satıra bir URL gelecek şekilde URL\'leri giriniz';
     });
 
-    sitemapBtn.addEventListener('click', function() {
+    sitemapBtn.addEventListener('click', () => {
         sitemapBtn.classList.add('active');
         urlListBtn.classList.remove('active');
-        urlInput.placeholder = 'Site haritası URLsini giriniz';
+        urlInput.placeholder = 'Site haritası URL\'sini giriniz';
     });
 
     // LLMS.txt oluşturma
-    generateBtn.onclick = function() {
-        // URL'leri al ve boş satırları temizle
-        const urls = urlInput.value.split('\n').filter(url => url.trim());
+    generateBtn.addEventListener('click', async () => {
+        const urls = urlInput.value.trim();
+        const title = titleInput.value.trim();
         
-        // Başlık ve açıklamayı al
-        const title = titleInput.value || 'LLMS.txt';
-        const description = descriptionInput.value;
-
-        // LLMS.txt formatında çıktı oluştur
-        let output = `# ${title}\n`;
-        
-        if (description) {
-            output += `> ${description}\n`;
+        if (!urls) {
+            alert('Lütfen URL giriniz!');
+            return;
         }
 
-        // Her URL için link oluştur
-        urls.forEach(url => {
-            output += `- [${url}](${url})\n`;
-        });
+        if (!title) {
+            alert('Lütfen başlık giriniz!');
+            return;
+        }
 
-        // Sonucu göster
-        resultOutput.value = output;
-        resultArea.style.display = 'block';
-    };
+        loader.style.display = 'block';
+        resultArea.style.display = 'none';
 
-    // Kopyala butonu
-    copyBtn.addEventListener('click', function() {
+        try {
+            let urlList;
+            if (sitemapBtn.classList.contains('active')) {
+                // Sitemap modu
+                urlList = await processSitemap(urls);
+            } else {
+                // URL listesi modu
+                urlList = urls.split('\n').filter(url => url.trim()).map(url => {
+                    // URL'nin http:// veya https:// ile başlamasını sağla
+                    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                        return 'https://' + url;
+                    }
+                    return url;
+                });
+            }
+
+            const result = await generateLLMS(urlList);
+            resultOutput.value = result;
+            resultArea.style.display = 'block';
+        } catch (error) {
+            console.error('Hata:', error);
+            alert('Bir hata oluştu: ' + error.message);
+        } finally {
+            loader.style.display = 'none';
+        }
+    });
+
+    // Kopyalama işlemi
+    copyBtn.addEventListener('click', () => {
         resultOutput.select();
         document.execCommand('copy');
         alert('Kopyalandı!');
     });
 
-    // İndir butonu
-    downloadBtn.addEventListener('click', function() {
+    // İndirme işlemi
+    downloadBtn.addEventListener('click', () => {
         const blob = new Blob([resultOutput.value], { type: 'text/plain' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
