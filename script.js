@@ -27,20 +27,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Sayfa içeriğini getiren fonksiyon
     async function fetchPageContent(url) {
-        console.log('Sayfa içeriği alınıyor:', url); // Debug log
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const response = await fetch(proxyUrl);
-        const data = await response.json();
-        return data.contents;
+        try {
+            // Yeni proxy servisi kullanımı
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error('Sayfa alınamadı');
+            const text = await response.text();
+            return text;
+        } catch (error) {
+            console.error('Fetch hatası:', error);
+            throw error;
+        }
     }
 
-    // Sitemap içeriğini işleyen fonksiyon
+    // Sitemap işleme fonksiyonu
     async function processSitemap(sitemapUrl) {
-        console.log('Sitemap işleniyor:', sitemapUrl); // Debug log
-        const xmlContent = await fetchPageContent(sitemapUrl);
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
-        return Array.from(xmlDoc.getElementsByTagName('loc')).map(loc => loc.textContent.trim());
+        try {
+            const xmlContent = await fetchPageContent(sitemapUrl);
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
+            const urls = Array.from(xmlDoc.getElementsByTagName('loc')).map(loc => loc.textContent.trim());
+            console.log('Bulunan URLler:', urls);
+            return urls;
+        } catch (error) {
+            console.error('Sitemap işleme hatası:', error);
+            throw error;
+        }
     }
 
     // LLMS.txt oluşturma
@@ -49,17 +61,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const description = descriptionInput.value.trim();
         const inputUrl = urlInput.value.trim();
 
-        if (!inputUrl) {
-            alert('Lütfen URL giriniz!');
+        if (!title || !inputUrl) {
+            alert('Başlık ve URL alanları zorunludur!');
             return;
         }
-
-        if (!title) {
-            alert('Lütfen başlık giriniz!');
-            return;
-        }
-
-        console.log('İşlem başlıyor...'); // Debug log
 
         let result = `# ${title}\n`;
         if (description) {
@@ -69,21 +74,18 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             let urls = [];
             if (sitemapBtn.classList.contains('active')) {
-                console.log('Sitemap modu aktif'); // Debug log
+                console.log('Sitemap işleniyor...');
                 urls = await processSitemap(inputUrl);
             } else {
-                console.log('URL listesi modu aktif'); // Debug log
                 urls = inputUrl.split('\n')
                     .map(url => url.trim())
                     .filter(url => url)
                     .map(url => !url.startsWith('http') ? 'https://' + url : url);
             }
 
-            console.log('İşlenecek URLler:', urls); // Debug log
-
             for (const url of urls) {
                 try {
-                    console.log('URL işleniyor:', url); // Debug log
+                    console.log(`İşleniyor: ${url}`);
                     const html = await fetchPageContent(url);
                     const doc = new DOMParser().parseFromString(html, 'text/html');
 
@@ -96,7 +98,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else if (titleTag && titleTag.textContent.trim()) {
                         pageTitle = titleTag.textContent.trim();
                     } else {
-                        pageTitle = url;
+                        pageTitle = 'Başlık bulunamadı';
                     }
 
                     // Açıklama alma
@@ -113,18 +115,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
 
                     result += `- [${pageTitle}](${url})${pageDesc ? ': ' + pageDesc : ''}\n`;
-                    console.log('URL başarıyla işlendi:', url); // Debug log
+                    console.log(`Başarıyla işlendi: ${url}`);
                 } catch (error) {
-                    console.error(`URL işlenirken hata: ${url}`, error);
-                    result += `- [${url}](${url})\n`;
+                    console.error(`Hata (${url}):`, error);
+                    result += `- [URL işlenemedi](${url})\n`;
                 }
             }
 
             resultOutput.value = result;
-            console.log('İşlem tamamlandı'); // Debug log
         } catch (error) {
             console.error('Genel hata:', error);
-            alert('İşlem sırasında bir hata oluştu: ' + error.message);
+            alert('Bir hata oluştu: ' + error.message);
         }
     });
 
