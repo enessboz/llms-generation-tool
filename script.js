@@ -27,9 +27,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // LLMS.txt oluşturma
     generateBtn.addEventListener('click', async () => {
-        const urls = urlInput.value.trim();
         const title = titleInput.value.trim();
-        
+        const description = descriptionInput.value.trim();
+        const urls = urlInput.value.trim();
+
         if (!urls) {
             alert('Lütfen URL giriniz!');
             return;
@@ -43,31 +44,122 @@ document.addEventListener('DOMContentLoaded', function() {
         loader.style.display = 'block';
         resultArea.style.display = 'none';
 
-        try {
-            let urlList;
-            if (sitemapBtn.classList.contains('active')) {
-                // Sitemap modu
-                urlList = await processSitemap(urls);
-            } else {
-                // URL listesi modu
-                urlList = urls.split('\n').filter(url => url.trim()).map(url => {
-                    // URL'nin http:// veya https:// ile başlamasını sağla
-                    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                        return 'https://' + url;
-                    }
-                    return url;
-                });
-            }
-
-            const result = await generateLLMS(urlList);
-            resultOutput.value = result;
-            resultArea.style.display = 'block';
-        } catch (error) {
-            console.error('Hata:', error);
-            alert('Bir hata oluştu: ' + error.message);
-        } finally {
-            loader.style.display = 'none';
+        let result = '';
+        
+        // Başlık ekle
+        result += `# ${title}\n`;
+        
+        // Açıklama varsa ekle
+        if (description) {
+            result += `> ${description}\n`;
         }
+
+        if (sitemapBtn.classList.contains('active')) {
+            // Sitemap modu
+            try {
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(urls)}`;
+                const response = await fetch(proxyUrl);
+                const data = await response.json();
+                const xmlText = data.contents;
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+                const locations = xmlDoc.getElementsByTagName('loc');
+
+                for (let loc of locations) {
+                    const url = loc.textContent.trim();
+                    try {
+                        const pageProxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                        const pageResponse = await fetch(pageProxyUrl);
+                        const pageData = await pageResponse.json();
+                        const pageHtml = pageData.contents;
+                        const doc = new DOMParser().parseFromString(pageHtml, 'text/html');
+                        
+                        // Sayfa başlığını al (önce H1, yoksa title)
+                        let pageTitle = '';
+                        const h1 = doc.querySelector('h1');
+                        const title = doc.querySelector('title');
+                        if (h1 && h1.textContent.trim()) {
+                            pageTitle = h1.textContent.trim();
+                        } else if (title && title.textContent.trim()) {
+                            pageTitle = title.textContent.trim();
+                        } else {
+                            pageTitle = url;
+                        }
+
+                        // Meta description veya ilk paragrafı al
+                        let pageDesc = '';
+                        const metaDesc = doc.querySelector('meta[name="description"]');
+                        if (metaDesc && metaDesc.getAttribute('content')) {
+                            pageDesc = metaDesc.getAttribute('content').trim();
+                        } else {
+                            const firstP = doc.querySelector('p');
+                            if (firstP && firstP.textContent.trim()) {
+                                pageDesc = firstP.textContent.trim().substring(0, 200);
+                                if (firstP.textContent.length > 200) pageDesc += '...';
+                            }
+                        }
+
+                        result += `- [${pageTitle}](${url})${pageDesc ? ': ' + pageDesc : ''}\n`;
+                    } catch (error) {
+                        console.error(`Sayfa işlenirken hata: ${url}`, error);
+                        result += `- [${url}](${url})\n`;
+                    }
+                }
+            } catch (error) {
+                console.error('Sitemap işleme hatası:', error);
+                alert('Sitemap işlenirken hata oluştu: ' + error.message);
+            }
+        } else {
+            // URL listesi modu
+            const urlList = urls.split('\n').filter(url => url.trim());
+            for (let url of urlList) {
+                url = url.trim();
+                if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                    url = 'https://' + url;
+                }
+                
+                try {
+                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                    const response = await fetch(proxyUrl);
+                    const data = await response.json();
+                    const html = data.contents;
+                    const doc = new DOMParser().parseFromString(html, 'text/html');
+                    
+                    // Sayfa başlığını al
+                    let pageTitle = '';
+                    const h1 = doc.querySelector('h1');
+                    const title = doc.querySelector('title');
+                    if (h1 && h1.textContent.trim()) {
+                        pageTitle = h1.textContent.trim();
+                    } else if (title && title.textContent.trim()) {
+                        pageTitle = title.textContent.trim();
+                    } else {
+                        pageTitle = url;
+                    }
+
+                    // Meta description veya ilk paragrafı al
+                    let pageDesc = '';
+                    const metaDesc = doc.querySelector('meta[name="description"]');
+                    if (metaDesc && metaDesc.getAttribute('content')) {
+                        pageDesc = metaDesc.getAttribute('content').trim();
+                    } else {
+                        const firstP = doc.querySelector('p');
+                        if (firstP && firstP.textContent.trim()) {
+                            pageDesc = firstP.textContent.trim().substring(0, 200);
+                            if (firstP.textContent.length > 200) pageDesc += '...';
+                        }
+                    }
+
+                    result += `- [${pageTitle}](${url})${pageDesc ? ': ' + pageDesc : ''}\n`;
+                } catch (error) {
+                    console.error(`Sayfa işlenirken hata: ${url}`, error);
+                    result += `- [${url}](${url})\n`;
+                }
+            }
+        }
+
+        resultOutput.value = result;
+        resultArea.style.display = 'block';
     });
 
     // Kopyalama işlemi
