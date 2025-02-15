@@ -25,13 +25,31 @@ document.addEventListener('DOMContentLoaded', function() {
         urlInput.placeholder = 'Site haritası URL\'sini giriniz';
     });
 
+    // Sayfa içeriğini getiren fonksiyon
+    async function fetchPageContent(url) {
+        console.log('Sayfa içeriği alınıyor:', url); // Debug log
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl);
+        const data = await response.json();
+        return data.contents;
+    }
+
+    // Sitemap içeriğini işleyen fonksiyon
+    async function processSitemap(sitemapUrl) {
+        console.log('Sitemap işleniyor:', sitemapUrl); // Debug log
+        const xmlContent = await fetchPageContent(sitemapUrl);
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
+        return Array.from(xmlDoc.getElementsByTagName('loc')).map(loc => loc.textContent.trim());
+    }
+
     // LLMS.txt oluşturma
     generateBtn.addEventListener('click', async () => {
         const title = titleInput.value.trim();
         const description = descriptionInput.value.trim();
-        const urls = urlInput.value.trim();
+        const inputUrl = urlInput.value.trim();
 
-        if (!urls) {
+        if (!inputUrl) {
             alert('Lütfen URL giriniz!');
             return;
         }
@@ -41,103 +59,47 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        loader.style.display = 'block';
-        resultArea.style.display = 'none';
+        console.log('İşlem başlıyor...'); // Debug log
 
-        let result = '';
-        
-        // Başlık ekle
-        result += `# ${title}\n`;
-        
-        // Açıklama varsa ekle
+        let result = `# ${title}\n`;
         if (description) {
             result += `> ${description}\n`;
         }
 
-        if (sitemapBtn.classList.contains('active')) {
-            // Sitemap modu
-            try {
-                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(urls)}`;
-                const response = await fetch(proxyUrl);
-                const data = await response.json();
-                const xmlText = data.contents;
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-                const locations = xmlDoc.getElementsByTagName('loc');
-
-                for (let loc of locations) {
-                    const url = loc.textContent.trim();
-                    try {
-                        const pageProxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-                        const pageResponse = await fetch(pageProxyUrl);
-                        const pageData = await pageResponse.json();
-                        const pageHtml = pageData.contents;
-                        const doc = new DOMParser().parseFromString(pageHtml, 'text/html');
-                        
-                        // Sayfa başlığını al (önce H1, yoksa title)
-                        let pageTitle = '';
-                        const h1 = doc.querySelector('h1');
-                        const title = doc.querySelector('title');
-                        if (h1 && h1.textContent.trim()) {
-                            pageTitle = h1.textContent.trim();
-                        } else if (title && title.textContent.trim()) {
-                            pageTitle = title.textContent.trim();
-                        } else {
-                            pageTitle = url;
-                        }
-
-                        // Meta description veya ilk paragrafı al
-                        let pageDesc = '';
-                        const metaDesc = doc.querySelector('meta[name="description"]');
-                        if (metaDesc && metaDesc.getAttribute('content')) {
-                            pageDesc = metaDesc.getAttribute('content').trim();
-                        } else {
-                            const firstP = doc.querySelector('p');
-                            if (firstP && firstP.textContent.trim()) {
-                                pageDesc = firstP.textContent.trim().substring(0, 200);
-                                if (firstP.textContent.length > 200) pageDesc += '...';
-                            }
-                        }
-
-                        result += `- [${pageTitle}](${url})${pageDesc ? ': ' + pageDesc : ''}\n`;
-                    } catch (error) {
-                        console.error(`Sayfa işlenirken hata: ${url}`, error);
-                        result += `- [${url}](${url})\n`;
-                    }
-                }
-            } catch (error) {
-                console.error('Sitemap işleme hatası:', error);
-                alert('Sitemap işlenirken hata oluştu: ' + error.message);
+        try {
+            let urls = [];
+            if (sitemapBtn.classList.contains('active')) {
+                console.log('Sitemap modu aktif'); // Debug log
+                urls = await processSitemap(inputUrl);
+            } else {
+                console.log('URL listesi modu aktif'); // Debug log
+                urls = inputUrl.split('\n')
+                    .map(url => url.trim())
+                    .filter(url => url)
+                    .map(url => !url.startsWith('http') ? 'https://' + url : url);
             }
-        } else {
-            // URL listesi modu
-            const urlList = urls.split('\n').filter(url => url.trim());
-            for (let url of urlList) {
-                url = url.trim();
-                if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                    url = 'https://' + url;
-                }
-                
+
+            console.log('İşlenecek URLler:', urls); // Debug log
+
+            for (const url of urls) {
                 try {
-                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-                    const response = await fetch(proxyUrl);
-                    const data = await response.json();
-                    const html = data.contents;
+                    console.log('URL işleniyor:', url); // Debug log
+                    const html = await fetchPageContent(url);
                     const doc = new DOMParser().parseFromString(html, 'text/html');
-                    
-                    // Sayfa başlığını al
+
+                    // Başlık alma
                     let pageTitle = '';
                     const h1 = doc.querySelector('h1');
-                    const title = doc.querySelector('title');
+                    const titleTag = doc.querySelector('title');
                     if (h1 && h1.textContent.trim()) {
                         pageTitle = h1.textContent.trim();
-                    } else if (title && title.textContent.trim()) {
-                        pageTitle = title.textContent.trim();
+                    } else if (titleTag && titleTag.textContent.trim()) {
+                        pageTitle = titleTag.textContent.trim();
                     } else {
                         pageTitle = url;
                     }
 
-                    // Meta description veya ilk paragrafı al
+                    // Açıklama alma
                     let pageDesc = '';
                     const metaDesc = doc.querySelector('meta[name="description"]');
                     if (metaDesc && metaDesc.getAttribute('content')) {
@@ -151,15 +113,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
 
                     result += `- [${pageTitle}](${url})${pageDesc ? ': ' + pageDesc : ''}\n`;
+                    console.log('URL başarıyla işlendi:', url); // Debug log
                 } catch (error) {
-                    console.error(`Sayfa işlenirken hata: ${url}`, error);
+                    console.error(`URL işlenirken hata: ${url}`, error);
                     result += `- [${url}](${url})\n`;
                 }
             }
-        }
 
-        resultOutput.value = result;
-        resultArea.style.display = 'block';
+            resultOutput.value = result;
+            console.log('İşlem tamamlandı'); // Debug log
+        } catch (error) {
+            console.error('Genel hata:', error);
+            alert('İşlem sırasında bir hata oluştu: ' + error.message);
+        }
     });
 
     // Kopyalama işlemi
